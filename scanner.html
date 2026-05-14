@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>فحص التذكرة</title>
+<link href="https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --teal: #1B6B74;
+    --teal-light: #2A8A95;
+    --teal-deep: #0F4A52;
+    --copper: #B87333;
+    --copper-pale: #F2E4CC;
+    --ivory: #FAF7F2;
+    --ivory-dark: #F0EBE1;
+    --sand: #E8DFD0;
+    --charcoal: #2C2C2C;
+    --muted: #7A7066;
+    --white: #FFFFFF;
+    --red: #C0392B;
+    --green: #1B7A4A;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Tajawal', sans-serif;
+    background: var(--ivory);
+    color: var(--charcoal);
+    min-height: 100vh;
+  }
+
+  /* ══════════════════════════════
+     PIN LOCK SCREEN
+  ══════════════════════════════ */
+  #lock-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--teal-deep);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+
+  #lock-screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 60% at 20% 20%, rgba(27,107,116,0.4) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 70% at 80% 80%, rgba(184,115,51,0.15) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .lock-card {
+    position: relative;
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 28px;
+    padding: 44px 36px;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+  }
+
+  .lock-icon {
+    width: 72px; height: 72px;
+    background: rgba(184,115,51,0.2);
+    border: 2px solid rgba(184,115,51,0.4);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 2rem;
+  }
+
+  .lock-title {
+    font-family: 'Scheherazade New', serif;
+    font-size: 1.7rem;
+    color: var(--copper-pale);
+    margin-bottom: 6px;
+  }
+
+  .lock-subtitle {
+    font-size: 0.85rem;
+    color: rgba(242,228,204,0.5);
+    margin-bottom: 32px;
+    line-height: 1.8;
+  }
+
+  /* PIN dots */
+  .pin-dots {
+    display: flex; justify-content: center;
+    gap: 14px; margin-bottom: 28px;
+  }
+
+  .pin-dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(184,115,51,0.4);
+    background: transparent;
+    transition: all 0.2s ease;
+  }
+
+  .pin-dot.filled {
+    background: var(--copper);
+    border-color: var(--copper);
+    transform: scale(1.15);
+  }
+
+  .pin-dot.error {
+    background: var(--red);
+    border-color: var(--red);
+    animation: shake 0.4s ease;
+  }
+
+  @keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-6px)}
+    40%{transform:translateX(6px)}
+    60%{transform:translateX(-4px)}
+    80%{transform:translateX(4px)}
+  }
+
+  /* Numpad */
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin-bottom: 16px;
+  }
+
+  .num-btn {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 18px 10px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 1.3rem; font-weight: 700;
+    color: var(--copper-pale);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    user-select: none;
+  }
+
+  .num-btn:hover { background: rgba(255,255,255,0.13); }
+  .num-btn:active { transform: scale(0.93); background: rgba(184,115,51,0.25); }
+  .num-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .num-btn.del { font-size: 1rem; color: rgba(242,228,204,0.5); }
+
+  .num-btn.confirm {
+    background: var(--copper); border-color: var(--copper);
+    color: var(--teal-deep); font-weight: 800;
+  }
+  .num-btn.confirm:hover { background: #C98040; }
+
+  .pin-error-msg {
+    font-size: 0.82rem; color: #EF9A9A;
+    min-height: 20px; margin-top: 4px;
+  }
+
+  .attempts-left {
+    font-size: 0.75rem;
+    color: rgba(242,228,204,0.35);
+    margin-top: 10px;
+  }
+
+  /* ══════════════════════════════
+     MAIN SCANNER APP
+  ══════════════════════════════ */
+  #app { display: none; }
+
+  header {
+    background: var(--white);
+    border-bottom: 1px solid var(--sand);
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 10;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  }
+
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  header h1 {
+    font-family: 'Scheherazade New', serif;
+    font-size: 1.15rem; color: var(--teal-deep);
+  }
+
+  .scan-count {
+    background: rgba(27,107,116,0.1);
+    border: 1px solid rgba(27,107,116,0.2);
+    border-radius: 50px; padding: 5px 14px;
+    font-size: 0.78rem; color: var(--teal); font-weight: 700;
+  }
+
+  .logout-btn {
+    background: transparent; border: 1px solid var(--sand);
+    border-radius: 8px; padding: 5px 12px;
+    font-family: 'Tajawal', sans-serif; font-size: 0.75rem;
+    color: var(--muted); cursor: pointer; transition: background 0.2s;
+  }
+  .logout-btn:hover { background: var(--ivory-dark); }
+
+  .main { padding: 20px; max-width: 500px; margin: 0 auto; }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(2,1fr);
+    gap: 12px; margin-bottom: 20px;
+  }
+
+  .stat-box {
+    background: var(--white); border: 1px solid var(--sand);
+    border-radius: 14px; padding: 16px; text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .stat-box .num { font-size: 2rem; font-weight: 800; color: var(--teal); line-height: 1; }
+  .stat-box .lbl { font-size: 0.73rem; color: var(--muted); margin-top: 4px; }
+
+  .result-card {
+    border-radius: 20px; padding: 28px 24px;
+    margin-bottom: 20px; display: none;
+    animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+
+  @keyframes popIn {
+    from { opacity:0; transform:scale(0.85) }
+    to { opacity:1; transform:scale(1) }
+  }
+
+  .result-card.valid   { background:#E8F5EE; border:2px solid #1B7A4A; }
+  .result-card.invalid { background:#FDECEA; border:2px solid var(--red); }
+  .result-card.already { background:var(--copper-pale); border:2px solid var(--copper); }
+
+  .result-header { display:flex; align-items:center; gap:14px; margin-bottom:20px; }
+
+  .result-icon {
+    width:56px; height:56px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.6rem; flex-shrink:0;
+  }
+
+  .valid .result-icon   { background:#1B7A4A; }
+  .invalid .result-icon { background:var(--red); }
+  .already .result-icon { background:var(--copper); }
+
+  .result-title { font-size:1.2rem; font-weight:800; }
+  .valid .result-title   { color:#1B7A4A; }
+  .invalid .result-title { color:var(--red); }
+  .already .result-title { color:var(--copper); }
+
+  .result-row {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.06); font-size:0.9rem;
+  }
+  .result-row:last-child { border-bottom:none; }
+  .result-row .k { color:var(--muted); }
+  .result-row .v { color:var(--charcoal); font-weight:600; direction:ltr; text-align:left; }
+
+  .btn-next {
+    width:100%; margin-top:20px; padding:14px;
+    background:var(--teal-deep); border:none; border-radius:12px;
+    font-family:'Tajawal',sans-serif; font-size:1rem; font-weight:700;
+    color:var(--white); cursor:pointer; transition:background 0.2s,transform 0.15s;
+  }
+  .btn-next:hover { background:var(--teal); transform:translateY(-1px); }
+
+  .instruction {
+    background:var(--white); border:1px solid var(--sand);
+    border-radius:16px; padding:24px; margin-bottom:20px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.04);
+  }
+  .instruction .icon { font-size:2.8rem; margin-bottom:12px; text-align:center; }
+  .instruction h2 {
+    font-family:'Scheherazade New',serif; color:var(--teal-deep);
+    font-size:1.2rem; margin-bottom:16px; text-align:center;
+  }
+
+  .step-item {
+    display:flex; align-items:flex-start; gap:10px;
+    font-size:0.9rem; color:var(--muted);
+    margin-bottom:12px; line-height:1.7;
+  }
+  .step-num {
+    background:var(--teal-deep); color:white; border-radius:50%;
+    width:24px; height:24px; display:flex; align-items:center;
+    justify-content:center; font-size:0.8rem; font-weight:800;
+    flex-shrink:0; margin-top:2px;
+  }
+
+  .section-title {
+    font-family:'Scheherazade New',serif; color:var(--teal);
+    font-size:1rem; margin-bottom:12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-title::after {
+    content:''; flex:1; height:1px;
+    background:linear-gradient(90deg,var(--sand),transparent);
+  }
+
+  .attendee-list { display:flex; flex-direction:column; gap:8px; }
+
+  .attendee-item {
+    background:var(--white); border:1px solid var(--sand);
+    border-radius:12px; padding:12px 16px;
+    display:flex; justify-content:space-between; align-items:center;
+    box-shadow:0 1px 4px rgba(0,0,0,0.03);
+  }
+  .attendee-item .name { font-weight:700; color:var(--charcoal); font-size:0.9rem; }
+  .attendee-item .time { font-size:0.72rem; color:var(--muted); margin-top:2px; }
+
+  .badge { font-size:0.7rem; padding:4px 12px; border-radius:50px; font-weight:700; }
+  .badge.checked { background:#1B7A4A; color:white; }
+
+  .empty-state {
+    text-align:center; padding:32px; color:var(--muted); font-size:0.9rem;
+    background:var(--white); border:1px dashed var(--sand); border-radius:12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- PIN LOCK SCREEN -->
+<div id="lock-screen">
+  <div class="lock-card">
+    <div class="lock-icon">🔐</div>
+    <div class="lock-title">بوابة المسح</div>
+    <p class="lock-subtitle">هذه الصفحة للمنظمين فقط<br>أدخل رمز الدخول للمتابعة</p>
+
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+    </div>
+
+    <div class="numpad">
+      <button class="num-btn" onclick="pressNum('1')">١</button>
+      <button class="num-btn" onclick="pressNum('2')">٢</button>
+      <button class="num-btn" onclick="pressNum('3')">٣</button>
+      <button class="num-btn" onclick="pressNum('4')">٤</button>
+      <button class="num-btn" onclick="pressNum('5')">٥</button>
+      <button class="num-btn" onclick="pressNum('6')">٦</button>
+      <button class="num-btn" onclick="pressNum('7')">٧</button>
+      <button class="num-btn" onclick="pressNum('8')">٨</button>
+      <button class="num-btn" onclick="pressNum('9')">٩</button>
+      <button class="num-btn del" onclick="deleteLast()">⌫</button>
+      <button class="num-btn" onclick="pressNum('0')">٠</button>
+      <button class="num-btn confirm" onclick="confirmPIN()">✓</button>
+    </div>
+
+    <div class="pin-error-msg" id="pin-error"></div>
+    <div class="attempts-left" id="attempts-left"></div>
+  </div>
+</div>
+
+<!-- MAIN SCANNER APP -->
+<div id="app">
+  <header>
+    <div class="header-right">
+      <h1>🎟 فحص التذاكر</h1>
+      <div class="scan-count" id="scan-count">0 دخول</div>
+    </div>
+    <button class="logout-btn" onclick="logout()">خروج 🔒</button>
+  </header>
+
+  <div class="main">
+    <div class="stats">
+      <div class="stat-box">
+        <div class="num" id="stat-checked">0</div>
+        <div class="lbl">تم الدخول</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="stat-total">0</div>
+        <div class="lbl">إجمالي المسح</div>
+      </div>
+    </div>
+
+    <div class="result-card" id="result-card">
+      <div class="result-header">
+        <div class="result-icon" id="result-icon"></div>
+        <div class="result-title" id="result-title"></div>
+      </div>
+      <div id="result-details"></div>
+      <button class="btn-next" onclick="clearResult()">📷 مسح التذكرة التالية</button>
+    </div>
+
+    <div class="instruction" id="instruction-box">
+      <div class="icon">📱</div>
+      <h2>طريقة مسح التذاكر</h2>
+      <div class="step-item"><div class="step-num">1</div><span>افتح <strong>كاميرا هاتفك العادية</strong> (ليس متصفح الإنترنت)</span></div>
+      <div class="step-item"><div class="step-num">2</div><span>وجّه الكاميرا نحو <strong>رمز QR</strong> الخاص بالحاضر</span></div>
+      <div class="step-item"><div class="step-num">3</div><span>اضغط على <strong>الرابط</strong> الذي يظهر تلقائياً</span></div>
+      <div class="step-item"><div class="step-num">4</div><span>ستنفتح هذه الصفحة مع <strong>بيانات الحاضر</strong> كاملة ✅</span></div>
+    </div>
+
+    <div class="section-title">✦ سجل الدخول اليوم</div>
+    <div class="attendee-list" id="attendee-list">
+      <div class="empty-state">لم يتم فحص أي تذكرة بعد</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ══════════════════════════════════════════════
+  //   ⚙️  CHANGE YOUR PIN HERE (any 4 digits)
+  const CORRECT_PIN = '1526';
+  //   Session lasts this many minutes before re-login:
+  const SESSION_MINUTES = 120;
+  // ══════════════════════════════════════════════
+
+  const MAX_ATTEMPTS = 5;
+  let currentPin = '';
+  let attempts = parseInt(sessionStorage.getItem('pin_attempts') || '0');
+  let locked = sessionStorage.getItem('pin_locked') === 'true';
+
+  function isAuthenticated() {
+    const auth = sessionStorage.getItem('scanner_auth');
+    if (!auth) return false;
+    const { timestamp } = JSON.parse(auth);
+    return (Date.now() - timestamp) / 60000 < SESSION_MINUTES;
+  }
+
+  function authenticate() {
+    sessionStorage.setItem('scanner_auth', JSON.stringify({ timestamp: Date.now() }));
+    sessionStorage.setItem('pin_attempts', '0');
+    sessionStorage.removeItem('pin_locked');
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    updateStats();
+    renderList();
+    checkURLParams();
+  }
+
+  function logout() {
+    sessionStorage.removeItem('scanner_auth');
+    window.location.href = window.location.pathname;
+  }
+
+  function pressNum(n) {
+    if (locked || currentPin.length >= 4) return;
+    currentPin += n;
+    updateDots();
+    if (currentPin.length === 4) setTimeout(confirmPIN, 160);
+  }
+
+  function deleteLast() {
+    currentPin = currentPin.slice(0, -1);
+    updateDots();
+    document.getElementById('pin-error').textContent = '';
+  }
+
+  function updateDots(state) {
+    for (let i = 0; i < 4; i++) {
+      const dot = document.getElementById('d' + i);
+      dot.className = 'pin-dot';
+      if (state === 'error') dot.classList.add('error', 'filled');
+      else if (i < currentPin.length) dot.classList.add('filled');
+    }
+  }
+
+  function confirmPIN() {
+    if (locked) return;
+    if (currentPin === CORRECT_PIN) {
+      authenticate();
+      return;
+    }
+
+    attempts++;
+    sessionStorage.setItem('pin_attempts', attempts);
+    updateDots('error');
+    setTimeout(() => { currentPin = ''; updateDots(); }, 650);
+
+    const remaining = MAX_ATTEMPTS - attempts;
+
+    if (remaining <= 0) {
+      locked = true;
+      sessionStorage.setItem('pin_locked', 'true');
+      document.getElementById('pin-error').textContent = '🚫 تم قفل الصفحة. انتظر دقيقة.';
+      document.getElementById('attempts-left').textContent = '';
+      document.querySelectorAll('.num-btn').forEach(b => b.disabled = true);
+      setTimeout(() => {
+        sessionStorage.removeItem('pin_locked');
+        sessionStorage.setItem('pin_attempts', '0');
+        window.location.reload();
+      }, 60000);
+    } else {
+      currentPin = '';
+      document.getElementById('pin-error').textContent = 'رمز خاطئ، حاول مجدداً';
+      document.getElementById('attempts-left').textContent =
+        `محاولات متبقية: ${remaining} من ${MAX_ATTEMPTS}`;
+    }
+  }
+
+  // Apply lock state on load
+  if (locked) {
+    document.getElementById('pin-error').textContent = '🚫 تم قفل الصفحة مؤقتاً';
+    document.querySelectorAll('.num-btn').forEach(b => b.disabled = true);
+  }
+
+  // Auto-login if session still valid
+  if (isAuthenticated()) authenticate();
+
+  // ── Scanner logic ──
+  function checkURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    const id    = params.get('id');
+    const name  = params.get('name');
+    const email = params.get('email');
+    const phone = params.get('phone');
+    const city  = params.get('city');
+    const paid  = params.get('paid');
+
+    if (!id) return;
+
+    const card = document.getElementById('result-card');
+    document.getElementById('instruction-box').style.display = 'none';
+    card.style.display = 'block';
+
+    const scanned = JSON.parse(localStorage.getItem('scanned_tickets') || '{}');
+    const total   = parseInt(localStorage.getItem('total_scans') || '0');
+    localStorage.setItem('total_scans', total + 1);
+
+    if (!name || !email || paid !== 'true') {
+      card.classList.add('invalid');
+      document.getElementById('result-icon').textContent = '❌';
+      document.getElementById('result-title').textContent = 'تذكرة غير صالحة';
+      document.getElementById('result-details').innerHTML =
+        `<div class="result-row"><span class="k">الحالة</span><span class="v" style="color:var(--red)">هذه التذكرة غير معتمدة</span></div>`;
+      updateStats(); return;
+    }
+
+    if (scanned[id]) {
+      card.classList.add('already');
+      document.getElementById('result-icon').textContent = '⚠️';
+      document.getElementById('result-title').textContent = 'مسحت مسبقاً!';
+      document.getElementById('result-details').innerHTML =
+        `<div class="result-row"><span class="k">الاسم</span><span class="v">${name}</span></div>
+         <div class="result-row"><span class="k">وقت الدخول</span><span class="v">${scanned[id]}</span></div>
+         <div class="result-row"><span class="k">⚠️ تنبيه</span><span class="v" style="color:var(--copper)">استُخدمت من قبل!</span></div>`;
+      updateStats(); return;
+    }
+
+    const time = new Date().toLocaleTimeString('ar');
+    scanned[id] = time;
+    localStorage.setItem('scanned_tickets', JSON.stringify(scanned));
+    const names = JSON.parse(localStorage.getItem('scanned_names') || '[]');
+    names.unshift({ name, email, phone, city, time });
+    localStorage.setItem('scanned_names', JSON.stringify(names));
+
+    card.classList.add('valid');
+    document.getElementById('result-icon').textContent = '✅';
+    document.getElementById('result-title').textContent = 'أهلاً وسهلاً! ✓';
+    document.getElementById('result-details').innerHTML =
+      `<div class="result-row"><span class="k">الاسم</span><span class="v">${name}</span></div>
+       <div class="result-row"><span class="k">البريد</span><span class="v">${email}</span></div>
+       <div class="result-row"><span class="k">الهاتف</span><span class="v">${phone || '—'}</span></div>
+       ${city ? `<div class="result-row"><span class="k">المدينة</span><span class="v">${city}</span></div>` : ''}
+       <div class="result-row"><span class="k">وقت الدخول</span><span class="v">${time}</span></div>`;
+
+    if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+    updateStats();
+    renderList();
+  }
+
+  function clearResult() { window.location.href = window.location.pathname; }
+
+  function updateStats() {
+    const scanned = JSON.parse(localStorage.getItem('scanned_tickets') || '{}');
+    const total   = parseInt(localStorage.getItem('total_scans') || '0');
+    const count   = Object.keys(scanned).length;
+    document.getElementById('stat-checked').textContent = count;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('scan-count').textContent = count + ' دخول';
+  }
+
+  function renderList() {
+    const names = JSON.parse(localStorage.getItem('scanned_names') || '[]');
+    const list  = document.getElementById('attendee-list');
+    if (!names.length) {
+      list.innerHTML = '<div class="empty-state">لم يتم فحص أي تذكرة بعد</div>';
+      return;
+    }
+    list.innerHTML = names.map(e => `
+      <div class="attendee-item">
+        <div>
+          <div class="name">${e.name}</div>
+          <div class="time">✓ ${e.time}</div>
+        </div>
+        <span class="badge checked">دخل</span>
+      </div>`).join('');
+  }
+</script>
+</body>
+</html>
